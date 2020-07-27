@@ -1,6 +1,7 @@
 import time, sys, os
 import numpy as np
 from scipy.linalg import LinAlgError
+from scipy.special import erf
 
 __all__ = ["lnlike_spec", "lnlike_phot", "chi_spec", "chi_phot", "write_log"]
 
@@ -119,10 +120,10 @@ def lnlike_phot(phot_mu, obs=None, phot_noise=None, f_outlier_phot=0.0, **vector
     mask = obs.get('phot_mask', slice(None))
     #delta = (obs['maggies'] - phot_mu)[mask]
     #var = (obs['maggies_unc'][mask])**2
-        
-    tmpdat = (obs['maggies'][mask])
-    tmpmod= (phot_mu[mask])
-    tmpsig = (obs['maggies_unc'][mask])     
+    ################################################ UL addition
+    tmpdat = obs['maggies'][mask]
+    tmpmod= phot_mu[mask]
+    tmpsig = obs['maggies_unc'][mask]    
     ul = [ tmpdat[i] for i in tmpsig if tmpsig[i] < 0]
     umo = [ tmpmod[i] for i in tmpsig if tmpsig[i] < 0] 
     pt = [ tmpdat[i] for i in tmpsig if tmpsig[i] > 0] 
@@ -130,8 +131,11 @@ def lnlike_phot(phot_mu, obs=None, phot_noise=None, f_outlier_phot=0.0, **vector
     var = [tmpsig[i]**2  for i in tmpsig if tmpsig[i] > 0] 
     
     delta = (pt - mo)
-    udelta = (ul - mo)
-        
+    udelta = (ul - mo)/np.sqrt(2)
+    sj = ul / 3.
+    pul = 2.*np.sqrt(np.pi*0.5)*sj*(1+erf(udelta/sj))
+    #############################################################
+
     if phot_noise is not None:
         filternames = [f.name for f in obs['filters']]
         vectors['mask'] = mask
@@ -151,15 +155,16 @@ def lnlike_phot(phot_mu, obs=None, phot_noise=None, f_outlier_phot=0.0, **vector
 
 
     # simple noise model
-    lnp = -0.5*( (delta**2/var) + np.log(2*np.pi*var) )
+    lnp = -0.5*( (delta**2/var) + np.log(2*np.pi*var))
+    lnp_ul = np.log(pul)-0.5*np.log(2.*np.pi*sj*sj)
+       
     if (f_outlier_phot == 0.0):
-            return lnp.sum()
+            return lnp.sum()+lnp_ul.sum()
     else:
         var_bad = var * (vectors["nsigma_outlier_phot"]**2)
         lnp_bad = -0.5*( (delta**2/var_bad) + np.log(2*np.pi*var_bad) )
         lnp_tot = np.logaddexp(lnp + np.log(1-f_outlier_phot), lnp_bad + np.log(f_outlier_phot))
-
-        return lnp_tot.sum()
+        return lnp_tot.sum()+lnp_ul.sum()
 
 
 def chi_phot(phot_mu, obs, **extras):
@@ -176,14 +181,29 @@ def chi_phot(phot_mu, obs, **extras):
 
     :returns chi:
         An array of noise weighted residuals, same length as the number of
-        unmasked phtometric points.
+        unmasked photometric points.
     """
     if obs['maggies'] is None:
         return np.array([])
 
     mask = obs.get('phot_mask', slice(None))
-    delta = (obs['maggies'] - phot_mu)[mask]
-    unc = obs['maggies_unc'][mask]
+    #delta = (obs['maggies'] - phot_mu)[mask]
+    #unc = obs['maggies_unc'][mask]
+    ################################################ UL addition
+    tmpdat = obs['maggies'][mask]
+    tmpmod= phot_mu[mask]
+    tmpsig = obs['maggies_unc'][mask]    
+    ul = [ tmpdat[i] for i in tmpsig if tmpsig[i] < 0]
+    umo = [ tmpmod[i] for i in tmpsig if tmpsig[i] < 0] 
+    pt = [ tmpdat[i] for i in tmpsig if tmpsig[i] > 0] 
+    mo = [ tmpmod[i] for i in tmpsig if tmpsig[i] > 0] 
+    var = [tmpsig[i]**2  for i in tmpsig if tmpsig[i] > 0] 
+    
+    delta = (pt - mo)
+    udelta = (ul - mo)/np.sqrt(2)
+    sj = ul / 3.
+    pul = 2.*np.sqrt(np.pi*0.5)*sj*(1+erf(udelta/sj))
+    #############################################################
     chi = delta / unc
     return chi
 
