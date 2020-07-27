@@ -117,9 +117,21 @@ def lnlike_phot(phot_mu, obs=None, phot_noise=None, f_outlier_phot=0.0, **vector
         return 0.0
 
     mask = obs.get('phot_mask', slice(None))
-    delta = (obs['maggies'] - phot_mu)[mask]
-    var = (obs['maggies_unc'][mask])**2
-
+    #delta = (obs['maggies'] - phot_mu)[mask]
+    #var = (obs['maggies_unc'][mask])**2
+        
+    tmpdat = (obs['maggies'][mask])
+    tmpmod= (phot_mu[mask])
+    tmpsig = (obs['maggies_unc'][mask])     
+    ul = [ tmpdat[i] for i in tmpsig if tmpsig[i] < 0]
+    umo = [ tmpmod[i] for i in tmpsig if tmpsig[i] < 0] 
+    pt = [ tmpdat[i] for i in tmpsig if tmpsig[i] > 0] 
+    mo = [ tmpmod[i] for i in tmpsig if tmpsig[i] > 0] 
+    var = [tmpsig[i]**2  for i in tmpsig if tmpsig[i] > 0] 
+    
+    delta = (pt - mo)
+    udelta = (ul - mo)
+        
     if phot_noise is not None:
         filternames = [f.name for f in obs['filters']]
         vectors['mask'] = mask
